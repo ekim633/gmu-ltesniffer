@@ -2,6 +2,13 @@
 
 float p_a_array[8]{-6, -4.77, -3, -1.77, 0, 1, 2, 3};
 
+
+extern uint32_t global_target_rnti;
+extern std::mutex global_target_rnti_mutex;
+
+extern uint32_t global_target_imsi;
+extern std::mutex global_target_imsi_mutex;
+
 PDSCH_Decoder::PDSCH_Decoder(uint32_t idx,
 							 LTESniffer_pcap_writer *pcapwriter,
 							 MCSTracking *mcs_tracking,
@@ -141,6 +148,42 @@ int PDSCH_Decoder::decode_rrc_connection_setup(uint8_t *sdu_ptr, int length, lte
 			rrc_con_set.rr_cfg_ded.phys_cfg_ded.pusch_cfg_ded.beta_offset_cqi_idx = msg_r8->rr_cfg_ded.phys_cfg_ded.pusch_cfg_ded.beta_offset_cqi_idx;
 			rrc_con_set.rr_cfg_ded.phys_cfg_ded.pusch_cfg_ded.beta_offset_ri_idx = msg_r8->rr_cfg_ded.phys_cfg_ded.pusch_cfg_ded.beta_offset_ri_idx;
 
+			// TODO: capture setup IMSI
+			// ERROR("RRC Conn Setup");
+#if 0
+			uint32_t nas_size = con_setup.crit_exts.c1().rrc_conn_setup_r8().ded_info_nas_list[0].size(); // nas list has many nas msg
+
+			LIBLTE_BYTE_MSG_STRUCT nas_msg;
+			nas_msg.N_bytes = nas_size;
+			/*assume that our nas message is in index 0*/
+			memcpy(nas_msg.msg, con_setup.crit_exts.c1().rrc_conn_setup_r8().ded_info_nas_list[0].data(), nas_size);
+
+			uint8  pd           = 0;
+			uint8  msg_type     = 0;
+			liblte_mme_parse_msg_header(&nas_msg, &pd, &msg_type);
+			if (msg_type == LIBLTE_MME_MSG_TYPE_ATTACH_ACCEPT) {
+				LIBLTE_MME_ATTACH_ACCEPT_MSG_STRUCT attach_accept = {};
+				LIBLTE_ERROR_ENUM err = liblte_mme_unpack_attach_accept_msg(&nas_msg, &attach_accept);
+				if (err == LIBLTE_SUCCESS){
+					LIBLTE_MME_ACTIVATE_DEFAULT_EPS_BEARER_CONTEXT_REQUEST_MSG_STRUCT act_def_eps_bearer_context_req = {};
+					liblte_mme_unpack_activate_default_eps_bearer_context_request_msg(&attach_accept.esm_msg,
+																					&act_def_eps_bearer_context_req);
+
+					ERROR("RRC Conn Reconfig");
+					if (attach_accept.ms_id_present) {
+						global_target_imsi_mutex.lock();
+						uint8 *data = attach_accept.ms_id.imsi;
+						// if (attach_accept.ms_id.imsi == global_target_imsi) {
+						// 	*imsi_matched = true;
+						// }
+						global_target_imsi_mutex.unlock();
+					} else {
+						ERROR("RRC Reconfig ID Missing");
+					}
+				}
+			}
+#endif
+
 			/*get UE Specific config*/
 			ue_config->p_a = p_a_array[msg_r8->rr_cfg_ded.phys_cfg_ded.pdsch_cfg_ded.p_a]; // convert p_a index to float number
 			ue_config->uci_config.I_offset_ack = msg_r8->rr_cfg_ded.phys_cfg_ded.pusch_cfg_ded.beta_offset_ack_idx;
@@ -178,7 +221,8 @@ int PDSCH_Decoder::decode_rrc_connection_setup(uint8_t *sdu_ptr, int length, lte
 	}
 	return SRSRAN_ERROR;
 }
- int  PDSCH_Decoder::decode_rrc_connection_reconfig(uint8_t *sdu_ptr, int length, DL_Sniffer_PDU_info_t &pdu_info, int tti_tx_dl){
+ int  PDSCH_Decoder::decode_rrc_connection_reconfig(uint8_t *sdu_ptr, int length, DL_Sniffer_PDU_info_t &pdu_info, int tti_tx_dl, bool *imsi_matched){
+	*imsi_matched = false;
 	int ret = SRSRAN_ERROR;
 	asn1::rrc::dl_dcch_msg_s  dl_dcch_msg;
 	asn1::cbit_ref bref(sdu_ptr, length);
@@ -206,7 +250,19 @@ int PDSCH_Decoder::decode_rrc_connection_setup(uint8_t *sdu_ptr, int length, lte
 				if (err == LIBLTE_SUCCESS){
 					LIBLTE_MME_ACTIVATE_DEFAULT_EPS_BEARER_CONTEXT_REQUEST_MSG_STRUCT act_def_eps_bearer_context_req = {};
 					liblte_mme_unpack_activate_default_eps_bearer_context_request_msg(&attach_accept.esm_msg,
-																					&act_def_eps_bearer_context_req);				
+																					&act_def_eps_bearer_context_req);
+
+					// ERROR("RRC Conn Reconfig");
+					if (attach_accept.ms_id_present) {
+						global_target_imsi_mutex.lock();
+						uint8 *data = attach_accept.ms_id.imsi;
+						// if (attach_accept.ms_id.imsi == global_target_imsi) {
+						// 	*imsi_matched = true;
+						// }
+						global_target_imsi_mutex.unlock();
+					} else {
+						ERROR("RRC Reconfig ID Missing");
+					}
 					if (attach_accept.guti_present){
 						pdu_info.tmsi = attach_accept.guti.guti.m_tmsi;
 						ret = SRSRAN_SUCCESS;
@@ -309,12 +365,19 @@ int PDSCH_Decoder::run_decode(int &mimo_ret,
 						uint8_t *sdu_ptr = pdu.get()->get_sdu_ptr() + 3; // assume that header is 3 bytes
 						//decode RRC Coonection Reconfiguration
 						DL_Sniffer_PDU_info_t pdu_info = {};
-						int ret = decode_rrc_connection_reconfig(sdu_ptr, sdu_length, pdu_info, tti);
+						bool imsi_matched;
+						int ret = decode_rrc_connection_reconfig(sdu_ptr, sdu_length, pdu_info, tti, &imsi_matched);
 						if (ret == SRSRAN_SUCCESS && (api_mode == 0 || api_mode == 3)){
 							std::stringstream ss;
 							ss << std::hex << std::setw(8) << std::setfill('0') << pdu_info.tmsi;
 							std::string tmsi_str = ss.str();
 							print_api_dl(tti, cur_rnti, ID_TMSI, tmsi_str, MSG_CON_RECONFIG);
+							if (imsi_matched) {
+								INFO("Target IMSI found: new RNTI=%d", cur_rnti);
+								global_target_rnti_mutex.lock();
+								global_target_rnti = cur_rnti;
+								global_target_rnti_mutex.unlock();
+							}
 						}
 					}
 					else
@@ -834,7 +897,9 @@ void PDSCH_Decoder::run_api_dl_mode(std::string RNTI_name, uint8_t *pdu, uint32_
 				uint8_t *sdu_ptr = pdu.get()->get_sdu_ptr() + 3; // assume that header is 3 bytes
 				//decode RRC Coonection Reconfiguration
 				DL_Sniffer_PDU_info_t pdu_info = {};
-				int ret = decode_rrc_connection_reconfig(sdu_ptr, sdu_length, pdu_info, tti);
+				bool imsi_matched;
+				// TODO: investigate why this is here
+				int ret = decode_rrc_connection_reconfig(sdu_ptr, sdu_length, pdu_info, tti, &imsi_matched);
 				if (ret == SRSRAN_SUCCESS && (api_mode == 0 || api_mode == 3)){
 					std::stringstream ss;
 					ss << std::hex << std::setw(8) << std::setfill('0') << pdu_info.tmsi;

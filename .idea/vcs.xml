@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/debug/cmnalib-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/debug/srsRAN-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/release/cmnalib-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/release/srsRAN-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/imgui" vcs="Git" />
+  </component>
+</project>

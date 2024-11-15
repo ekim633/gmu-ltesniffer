@@ -31,6 +31,13 @@
 #define ENABLE_AGC_DEFAULT
 using namespace std;
 
+extern uint32_t global_ui_nof_prb;
+extern bool global_ui_nof_prb_changed;
+extern std::mutex global_ui_nof_prb_mutex;
+
+extern bool global_sniffer_ready;
+extern std::mutex global_sniffer_ready_mutex;
+
 LTESniffer_Core::LTESniffer_Core(const Args& args):
   go_exit(false),
   args(args),
@@ -355,7 +362,16 @@ bool LTESniffer_Core::run(){
   uint32_t last_decoded_tm = 0;
 
   /* Length in complex samples */
-  uint32_t max_num_samples = 3 * SRSRAN_SF_LEN_PRB(cell.nof_prb); 
+  uint32_t max_num_samples = 3 * SRSRAN_SF_LEN_PRB(cell.nof_prb);
+
+  global_ui_nof_prb_mutex.lock();
+  global_ui_nof_prb = cell.nof_prb;
+  global_ui_nof_prb_changed = true;
+  global_ui_nof_prb_mutex.unlock();
+
+  global_sniffer_ready_mutex.lock();
+  global_sniffer_ready = true;
+  global_sniffer_ready_mutex.unlock();
 
   /* Main loop*/
   while (!go_exit && (sf_cnt < args.nof_subframes || args.nof_subframes == 0)){
@@ -393,6 +409,11 @@ bool LTESniffer_Core::run(){
               printf("Decoded MIB. SFN: %d, offset: %d\n", sfn, sfn_offset);
               sfn   = (sfn + sfn_offset) % 1024;
               state = DECODE_PDSCH;
+
+              global_ui_nof_prb_mutex.lock();
+              global_ui_nof_prb = cell.nof_prb;
+              global_ui_nof_prb_changed = true;
+              global_ui_nof_prb_mutex.unlock();
 
               //config RNTI Manager from Falcon Lib
               RNTIManager& rntiManager = phy->getCommon().getRNTIManager();

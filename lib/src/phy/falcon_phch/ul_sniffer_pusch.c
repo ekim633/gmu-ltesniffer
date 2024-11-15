@@ -4,6 +4,7 @@
  */
 
 #include "falcon/phy/falcon_phch/ul_sniffer_pusch.h"
+#include "srsran/phy/utils/debug.h"
 static const int tbs_table_32A[110] = 
     /* Implementation of Index 32A for uplink pusch, table Table 7.1.7.2.1-1 36.213 v15 */
     {904 , 1864 , 2792 , 3752 , 4584 , 5544 , 6456 , 7480 , 8248 , 9144 , 10296, 11064, 12216, 12960,

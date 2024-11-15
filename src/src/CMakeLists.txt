@@ -8,6 +8,7 @@ target_link_libraries(DL_Sniffer_lib
     pthread
     srsran_phy
     srsran_asn1
+    srsran_phch
     s1ap_asn1
     rrc_asn1
     asn1_utils

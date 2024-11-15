@@ -903,6 +903,11 @@ int PUSCH_Decoder::investigate_valid_ul_grant(DCI_UL &decoding_mem)
     {
         ret = SRSRAN_ERROR;
     }
+
+    if (!decoding_mem.ran_ul_grant) {
+        return SRSRAN_ERROR;
+    }
+
     /*if Transport Block size = 0 (wrong DCI detection or retransmission or pdsch for ack and uci)*/
     if (decoding_mem.ran_ul_grant->tb.tbs == 0 || decoding_mem.ran_ul_grant_256->tb.tbs == 0)
     {

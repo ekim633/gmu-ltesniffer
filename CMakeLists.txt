@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.8.11)
+cmake_minimum_required (VERSION 3.20)
 
 #######################################################################
 #   INSTALL TARGET for make install
@@ -201,6 +201,7 @@ else(SRSRAN_FOUND AND NOT FORCE_SUBPROJECT_SRSRAN)
   set(SRSRAN_LIBRARY_MAC srsran_mac)
   set(SRSRAN_LIBRARY_PDCP srsran_pdcp)
   set(SRSRAN_LIBRARY_RLC srsran_rlc)
+  set(SRSRAN_LIBRARY_PHCH srsran_phch)
   # set(SRSRAN_LIBRARY_SRSLOG srsran_srslog)
   # set(SRSRAN_LIBRARY_SUPPORT srsran_support)
   # set(SRSRAN_LIBRARY_SYSTEM srsran_system)
@@ -215,6 +216,7 @@ else(SRSRAN_FOUND AND NOT FORCE_SUBPROJECT_SRSRAN)
     ${SRSRAN_LIBRARY_MAC}
     ${SRSRAN_LIBRARY_PDCP}
     ${SRSRAN_LIBRARY_RLC}
+    ${SRSRAN_LIBRARY_PHCH}
     # ${SRSRAN_LIBRARY_SRSLOG}
     # ${SRSRAN_LIBRARY_SUPPORT}
     # ${SRSRAN_LIBRARY_SYSTEM}

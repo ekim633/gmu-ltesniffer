@@ -1,10 +1,11 @@
 add_subdirectory(include)
 add_subdirectory(src)
+add_subdirectory(imgui)
 
 set(INSTALL_BUNDLE)
 
 add_executable(LTESniffer LTESniffer.cc)
-target_link_libraries(LTESniffer DL_Sniffer_lib falcon_common falcon_phy falcon_util falcon_prof)
+target_link_libraries(LTESniffer SDL2 SDL2main GL dl imgui DL_Sniffer_lib falcon_common falcon_phy falcon_util falcon_prof)
 target_compile_options(LTESniffer PUBLIC "-std=c++11")
 list(APPEND INSTALL_BUNDLE LTESniffer)
 

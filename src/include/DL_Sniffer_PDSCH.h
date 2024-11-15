@@ -108,7 +108,7 @@ public:
                            uint32_t sf_idx);
     void unpack_pdsch_message(uint8_t* sdu_ptr, int length);
     int  decode_rrc_connection_setup(uint8_t* sdu_ptr, int length, ltesniffer_ue_spec_config_t *ue_config);
-    int  decode_rrc_connection_reconfig(uint8_t *sdu_ptr, int length, DL_Sniffer_PDU_info_t &pdu_info, int tti_tx_dl);                    
+    int  decode_rrc_connection_reconfig(uint8_t *sdu_ptr, int length, DL_Sniffer_PDU_info_t &pdu_info, int tti_tx_dl, bool *imsi_matched);
     int  decode_imsi_tmsi_paging(uint8_t* sdu_ptr, int length);
 
     void run_api_dl_mode(std::string RNTI_name, 

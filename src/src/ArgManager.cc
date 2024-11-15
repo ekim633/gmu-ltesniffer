@@ -107,8 +107,11 @@ void ArgManager::usage(Args& args, const std::string& prog) {
 void ArgManager::parseArgs(Args& args, int argc, char **argv) {
   int opt;
   defaultArgs(args);
-  while ((opt = getopt(argc, argv, "aAcCDdEfghHilLnpPrRsStTvwWyYqFIuUmOoz")) != -1) {
+  while ((opt = getopt(argc, argv, "aAcCDdEfghHilLnpPrRsStTvwWyYqFIuUmOozJ")) != -1) {
     switch (opt) {
+      case 'J':
+        args.enable_jamming = true;
+        break;
       case 'a':
         args.rf_args = argv[optind];
         break;
