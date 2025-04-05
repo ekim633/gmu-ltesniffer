@@ -24,6 +24,10 @@
 #include <SDL2/SDL_opengl.h>
 #endif
 
+std::vector<std::vector<int>> resourceBlockHistory;
+const int NUM_RESOURCE_BLOCKS = 50;
+const int DISPLAY_HISTORY = 10;
+
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 Args global_args;
@@ -74,9 +78,6 @@ int run() {
 // Main code
 int main(int argc, char** argv) {
     ArgManager::parseArgs(global_args, argc, argv);
-    if (!global_args.enable_jamming) {
-        return run();
-    }
 
 #if 0
     uhd::usrp::multi_usrp::sptr jammer_usrp = uhd::usrp::multi_usrp::make("type=b200");
@@ -87,11 +88,7 @@ int main(int argc, char** argv) {
     uhd::tx_streamer::sptr jammer_tx_stream;
 #endif
 
-#if 1
     std::thread lte_sniffer_thread{run};
-#else
-    global_ui_nof_prb = 50;
-#endif
 
     // Setup SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
@@ -245,13 +242,15 @@ int main(int argc, char** argv) {
             if (global_rb_allocation_indices_changed) {
                 last_rb_allocation_update_ticks = SDL_GetTicks();
                 display_rbs_dirty = true;
-                if (global_rb_allocation_indices_count > 0) {
-                    jammed_prb_index = (int32_t)global_rb_allocation_indices[0];
-                    assert(jammed_prb_index < nof_prb);
-                    jammer_usrp->set_tx_freq(display_rbs[jammed_prb_index].frequency);
-                } else {
-                    printf("Tried to choose new PRB to jam, but there were none\n");
-                    jammed_prb_index = -1;
+                if (global_args.enable_jamming) {
+                    if (global_rb_allocation_indices_count > 0) {
+                        jammed_prb_index = (int32_t)global_rb_allocation_indices[0];
+                        assert(jammed_prb_index < nof_prb);
+                        jammer_usrp->set_tx_freq(display_rbs[jammed_prb_index].frequency);
+                    } else {
+                        printf("Tried to choose new PRB to jam, but there were none\n");
+                        jammed_prb_index = -1;
+                    }
                 }
                 global_rb_allocation_indices_changed = false;
             }
@@ -275,32 +274,35 @@ int main(int argc, char** argv) {
 
 
             char imsi_buffer[16] = {};
+            ImGui::SetNextWindowSize(ImVec2(1000, 1200));
             ImGui::Begin("Info");
-            ImGui::Checkbox("Jamming Enabled", &jamming_enabled);
+            if (global_args.enable_jamming) {
+                ImGui::Checkbox("Jamming Enabled", &jamming_enabled);
+                ImGui::Text("Jammed PRB %d", jammed_prb_index);
+            }
 
             ImGui::SetKeyboardFocusHere();
-            //ImGui::Text("Current RNTI %d", global_target_rnti);
-            ImGui::Text("Current IMSI %s", global_target_imsi);
-            if (ImGui::InputText("IMSI", imsi_buffer, sizeof(imsi_buffer), ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-                printf("New target IMSI: %s\n", imsi_buffer);
-                global_target_imsi_mutex.lock();
-                strncpy(global_target_imsi, imsi_buffer, sizeof(global_target_imsi));
-                global_target_imsi_mutex.unlock();
-            }
-            char rnti_buffer[16] = {};
-            // if (ImGui::InputText("RNTI", rnti_buffer, sizeof(imsi_buffer), ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-            //     printf("New target RNTI: %s\n", rnti_buffer);
-            //     global_target_rnti_mutex.lock();
-            //     char *end;
-            //     long rnti = strtol(rnti_buffer, &end, 10);
-            //
-            //     if (*end == 0) {
-            //         global_target_rnti = rnti;
-            //     }
-            //     global_target_rnti_mutex.unlock();
+            // ImGui::Text("Current IMSI %s", global_target_imsi);
+            // if (ImGui::InputText("IMSI", imsi_buffer, sizeof(imsi_buffer), ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+            //     printf("New target IMSI: %s\n", imsi_buffer);
+            //     global_target_imsi_mutex.lock();
+            //     strncpy(global_target_imsi, imsi_buffer, sizeof(global_target_imsi));
+            //     global_target_imsi_mutex.unlock();
             // }
+            ImGui::Text("Current RNTI %d", global_target_rnti);
+            char rnti_buffer[16] = {};
+            if (ImGui::InputText("RNTI", rnti_buffer, sizeof(imsi_buffer), ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+                printf("New target RNTI: %s\n", rnti_buffer);
+                global_target_rnti_mutex.lock();
+                char *end;
+                long rnti = strtol(rnti_buffer, &end, 10);
 
-            ImGui::Text("Jammed PRB %d", jammed_prb_index);
+                if (*end == 0) {
+                    global_target_rnti = rnti;
+                }
+                global_target_rnti_mutex.unlock();
+            }
+
             ImGui::Text("Center Frequency DL: %.03f MHz", global_args.rf_freq / 1e6);
             ImGui::Text("# RBs: %u", nof_prb);
             ImGui::Text("# RBs allocated: %u", global_rb_allocation_indices_count);
@@ -314,11 +316,13 @@ int main(int argc, char** argv) {
             int32_t spacing_x = 1;
             int32_t spacing_y = 1;
             float outline_thickness = 4;
-            float cell_width = 20;
-            float cell_height = 20;
-            uint32_t max_columns = 20;
+            float cell_width = 10;
+            float cell_height = 10;
+            //it used to be 20
+            uint32_t max_columns = 1;
             float text_margin = 3;
             float section_spacing = 10;
+
 
             int32_t real_spacing_x = spacing_x;
             int32_t real_spacing_y = spacing_y;
@@ -374,6 +378,7 @@ int main(int argc, char** argv) {
                 float widest_message_width = 0;
                 float cumulative_text_height = 0;
 
+
 #define NEW_MESSAGE(msg, ...) \
 { snprintf(messages[message_count].text, ARRAY_SIZE(messages[message_count].text), msg __VA_OPT__(,) __VA_ARGS__); \
 messages[message_count].dimensions = font->CalcTextSizeA(font->FontSize, FLT_MAX, 0.0f, messages[message_count].text); \
@@ -396,7 +401,6 @@ if (messages[message_count].dimensions.x > widest_message_width) {widest_message
                     draw_list->AddText(position, im_white, messages[i].text);
                     cumulative_text_y += messages[i].dimensions.y;
                 }
-
             }
             ImGui::End();
         } else {
@@ -404,9 +408,12 @@ if (messages[message_count].dimensions.x > widest_message_width) {widest_message
             global_sniffer_ready_mutex.lock();
             ready = global_sniffer_ready;
             global_sniffer_ready_mutex.unlock();
-            if (ready) {
+            if (ready && global_args.enable_jamming) {
                 jammer_usrp = uhd::usrp::multi_usrp::make("type=b200");
+                // tune into the frequency of the target
+                //jammer_usrp->set_tx_freq(uhd::tune_request_t(2.45e9));
                 // jammer_usrp->set_tx_gain(0.0f);
+
                 jammer_tx_stream = jammer_usrp->get_tx_stream(uhd::stream_args_t{"sc8", "sc8"});
             }
             SDL_Delay(10);
