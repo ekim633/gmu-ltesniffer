@@ -322,7 +322,7 @@ int main(int argc, char** argv) {
             float cell_width = 10;
             float cell_height = 10;
             //it used to be 20
-            uint32_t max_columns = 1;
+            uint32_t max_columns = 20;
             float text_margin = 3;
             float section_spacing = 10;
 
@@ -441,7 +441,8 @@ if (messages[message_count].dimensions.x > widest_message_width) {widest_message
                 }
 
                 md.end_of_burst = true;
-                jammer_tx_stream->send("", 0, md); // signal end
+                jammer_tx_stream->send("", 0, md);
+                // signal end
             }
 
             SDL_Delay(10);
