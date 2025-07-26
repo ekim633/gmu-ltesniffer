@@ -1,6 +1,9 @@
 
 # LTEJammer - An Open-source LTE Downlink Smart Jammer 
 
+## Read the Research Paper
+[LTEJammer-Targeted-and-Persistent-Jamming-Attack-in-LTE.pdf](https://github.com/user-attachments/files/21448933/LTEJammer-Targeted-and-Persistent-Jamming-Attack-in-LTE.pdf)
+
 **LTEJammer** is An Open-source LTE Downlink Smart Jammer 
 
 We extended LTE-Sniffer with support for targeted jamming by introducing the -J parameter, enabling jamming of Downlink Control Information (DCI) within the Physical Downlink Control Channel (PDCCH).
@@ -10,6 +13,7 @@ Our implementation includes a user interface that provides real-time visualizati
 To identify a specific user, we map the TMSI (Temporary Mobile Subscriber Identity) to its corresponding RNTI (Radio Network Temporary Identifier). Using this, the jammer can persistently launch Denial of Service (DoS) attacks by further resolving the RNTI to the IMSI (International Mobile Subscriber Identity), a permanent identifier.
 
 By leveraging the LTE-Sniffer API, we enable selective and persistent jamming of targeted user equipment (UE) in real time.
+
 
 ## Ethical Consideration
 
